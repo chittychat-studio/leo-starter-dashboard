@@ -1,0 +1,129 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./**/id_rsa*)",
+      "Read(./**/id_ed25519*)",
+      "Read(./**/id_ecdsa*)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gcloud/**)",
+      "Read(~/.azure/**)",
+      "Read(~/.kube/config)",
+      "Read(~/.docker/config.json)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "Bash(rm -r -f *)",
+      "Bash(rm --recursive --force *)",
+      "PowerShell(Remove-Item * -Recurse * -Force*)",
+      "PowerShell(Remove-Item * -Force * -Recurse*)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease *)",
+      "PowerShell(git push --force *)",
+      "PowerShell(git push -f *)",
+      "Edit(./.claude/settings.json)",
+      "Edit(./.claude/settings.local.json)",
+      "Edit(./.claude/hooks/**)",
+      "Edit(./governance.yaml)",
+      "Edit(./.claude/.governor-managed.json)",
+      "Edit(./.claude/governor/state/**)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)"
+    ],
+    "ask": [
+      "Bash(fly deploy *)",
+      "Bash(flyctl deploy *)",
+      "Bash(terraform apply *)",
+      "Bash(kubectl apply *)",
+      "Bash(heroku *)",
+      "Bash(docker push *)",
+      "Bash(make deploy *)",
+      "Bash(./deploy.sh *)",
+      "Bash(claude *)",
+      "Bash(openai *)",
+      "Bash(replicate *)",
+      "Bash(pg_dump *)",
+      "Bash(pg_dumpall *)",
+      "Bash(mysqldump *)",
+      "Bash(mongodump *)",
+      "Bash(alembic downgrade *)",
+      "Bash(dropdb *)",
+      "Bash(pip install *)",
+      "Bash(poetry add *)",
+      "Bash(uv add *)",
+      "Bash(uv pip install *)",
+      "Bash(npm install *)",
+      "Bash(pnpm add *)",
+      "Bash(yarn add *)",
+      "WebFetch"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|PowerShell|Monitor|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob)$|^mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "-B",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/governor_pretool.py"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "-B",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/governor_posttool.py"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "-B",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/governor_posttool.py"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "-B",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/governor_stop.py"
+            ],
+            "timeout": 900
+          }
+        ]
+      }
+    ]
+  }
+}

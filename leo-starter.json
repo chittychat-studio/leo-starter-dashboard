@@ -2,8 +2,8 @@
   "name": "leo-starter-dashboard",
   "title": "Leo's starter: Dashboard from a spreadsheet",
   "description": "Drop, paste or load a CSV and get key numbers, charts and a searchable table. Runs entirely in the browser; data never leaves the device.",
-  "version": "1.0.0",
-  "license": "MIT (template code). Vendored GSAP uses the Standard No Charge GSAP License, see NOTICE.md.",
+  "version": "2.0.0",
+  "license": "MIT (template code). Chart.js, Papa Parse, three.js and Governor are MIT, the font is OFL 1.1. See NOTICE.md.",
   "author": "Cardzo",
   "stack": [
     "HTML",
@@ -11,23 +11,27 @@
     "JavaScript",
     "Chart.js 4.5.1",
     "Papa Parse 5.4.1",
-    "GSAP 3.15.0"
+    "three.js 0.186.1",
+    "Web Animations API and View Transitions (no animation library)"
   ],
   "buildStep": false,
   "entry": "index.html",
   "sampleData": "sample-sales.csv (fictional, 200 rows: date, region, product, units, revenue)",
   "features": [
     "Drag and drop, file picker, or paste CSV",
+    "3D bar field on the start screen (three.js, lazy loaded, static fallback), reading state for big files",
     "Comma, semicolon, tab and pipe separators, quoted fields",
     "Detects number, date and category columns",
-    "KPI tiles with count-up motion",
+    "KPI tiles with count-up transitions",
     "Line chart over a date column with automatic day, week or month buckets",
-    "Bar chart with choice of group, measure and sum, average or count",
-    "Category filter and date range",
-    "Sortable, searchable, paginated table",
+    "Bar chart with grouping chips and a view-transition cross-fade between groupings",
+    "Category filter and date range, with clear empty states",
+    "Keyboard shortcuts with a help list (press ?), instant when used from the keyboard",
+    "Sortable, searchable, paginated table; fast with 10,000 rows",
     "Export chart as PNG and filtered rows as CSV (formula-safe)",
-    "Light and dark themes, keyboard friendly, mobile layout",
-    "No network calls with your data"
+    "Light and dark themes, reduced motion respected, mobile layout",
+    "No network calls with your data",
+    "Governor pre-installed: AI coding guardrails for Claude Code (tier 3)"
   ],
   "demo": {
     "quick": "Double-click index.html, then click 'Try the sample sales data'",
@@ -35,8 +39,17 @@
     "screenshots": [
       "docs/desktop-light.png",
       "docs/desktop-dark.png",
-      "docs/phone-light.png"
+      "docs/phone-light.png",
+      "docs/start-light.png",
+      "docs/desktop-light-shortcuts.png",
+      "docs/desktop-light-empty.png"
     ]
+  },
+  "governor": {
+    "tier": 3,
+    "testCommand": "none",
+    "refresh": "/governor:init",
+    "remove": "/governor:remove"
   },
   "deploy": [
     "GitHub Pages",

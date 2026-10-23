@@ -33,6 +33,9 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
           <span>Load other data</span>
         </button>
+        <button class="icon-btn" type="button" id="help-btn" aria-label="Keyboard shortcuts" aria-keyshortcuts="?" title="Keyboard shortcuts (?)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1.5M7 14h10"/></svg>
+        </button>
         <button class="icon-btn" type="button" id="theme-toggle" aria-label="Switch to dark theme">
           <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1.5 12h3M19.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
           <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
@@ -55,9 +58,18 @@
 
       <div class="start-options">
         <label class="dropzone" id="dropzone" for="file-input">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14h6M9 17h4"/></svg>
-          <span class="dropzone-title">Drop a CSV file here</span>
-          <span class="dropzone-hint">or click to choose one. Commas, semicolons, tabs and pipes all work.</span>
+          <span class="dropzone-preview" aria-hidden="true">
+            <span class="pv-kpis"><i></i><i></i><i></i></span>
+            <span class="pv-chart"><i style="--h:38%"></i><i style="--h:62%"></i><i style="--h:48%"></i><i style="--h:80%"></i><i style="--h:56%"></i><i style="--h:92%"></i><i style="--h:70%"></i></span>
+            <span class="pv-rows"><i></i><i></i><i></i></span>
+          </span>
+          <span class="dropzone-copy">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14h6M9 17h4"/></svg>
+            <span class="dropzone-title">Drop a CSV file here</span>
+            <span class="dropzone-hint">or click to choose one. Commas, semicolons, tabs and pipes all work.</span>
+            <span class="dropzone-keys" aria-hidden="true">Press <kbd>O</kbd> to open a file, <kbd>S</kbd> for the sample, <kbd>?</kbd> for all shortcuts.</span>
+          </span>
+          <span class="dropzone-reading" aria-live="polite"><span class="reading-bar" aria-hidden="true"></span><span id="reading-name"></span></span>
           <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" class="sr-only">
         </label>
 
@@ -130,18 +142,19 @@
                 <span>PNG</span>
               </button>
             </header>
-            <div class="chart-box"><canvas id="line-chart" role="img" aria-label="Line chart"></canvas></div>
+            <div class="chart-box"><canvas id="line-chart" role="img" aria-label="Line chart"></canvas><p class="chart-empty" hidden>No rows match these filters.</p></div>
           </section>
 
           <section class="panel" id="bar-panel" aria-labelledby="bar-title">
             <header class="panel-head">
               <h2 id="bar-title">By group</h2>
+              <div class="group-switch" id="group-switch" role="radiogroup" aria-label="Group the bar chart by" hidden></div>
               <button class="btn btn-quiet btn-small" type="button" data-export="bar">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>
                 <span>PNG</span>
               </button>
             </header>
-            <div class="chart-box"><canvas id="bar-chart" role="img" aria-label="Bar chart"></canvas></div>
+            <div class="chart-box" id="bar-box"><canvas id="bar-chart" role="img" aria-label="Bar chart"></canvas><p class="chart-empty" hidden>No rows match these filters.</p></div>
           </section>
         </div>
 
@@ -183,14 +196,45 @@
   </main>
 
   <footer class="foot">
-    <p>Built with Leo's starter from Replore. Charts by Chart.js, parsing by Papa Parse, motion by GSAP.</p>
+    <p>Built with Leo's starter from Replore. Charts by Chart.js, parsing by Papa Parse, 3D by three.js.</p>
   </footer>
 
-  <div class="drop-overlay" id="drop-overlay" aria-hidden="true"><p>Drop your CSV to build a new dashboard</p></div>
+  <div class="drop-overlay" id="drop-overlay" aria-hidden="true">
+    <div class="drop-card">
+      <svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
+      <p class="drop-title">Drop your CSV to build a new dashboard</p>
+      <p class="drop-sub" id="drop-current"></p>
+    </div>
+  </div>
+
+  <dialog class="shortcuts" id="shortcuts" aria-labelledby="shortcuts-title">
+    <div class="shortcuts-head">
+      <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+      <button class="icon-btn" type="button" id="help-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <dl class="keys">
+      <div><dt><kbd>?</kbd></dt><dd>Show this list</dd></div>
+      <div><dt><kbd>O</kbd></dt><dd>Open a CSV file</dd></div>
+      <div><dt><kbd>S</kbd></dt><dd>Load the sample (start screen)</dd></div>
+      <div><dt><kbd>/</kbd></dt><dd>Search rows</dd></div>
+      <div><dt><kbd>G</kbd></dt><dd>Next grouping (<kbd>Shift</kbd> <kbd>G</kbd> for previous)</dd></div>
+      <div><dt><kbd>M</kbd></dt><dd>Next measure</dd></div>
+      <div><dt><kbd>C</kbd></dt><dd>Next calculation: sum, average, count</dd></div>
+      <div><dt><kbd>F</kbd></dt><dd>Go to filters</dd></div>
+      <div><dt><kbd>X</kbd></dt><dd>Clear filters</dd></div>
+      <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Previous or next table page</dd></div>
+      <div><dt><kbd>E</kbd></dt><dd>Download the rows as CSV</dd></div>
+      <div><dt><kbd>T</kbd></dt><dd>Switch light or dark theme</dd></div>
+      <div><dt><kbd>Esc</kbd></dt><dd>Close this list, or leave the search box</dd></div>
+    </dl>
+    <p class="keys-note">Shortcuts are off while you type in a box.</p>
+  </dialog>
 
   <script src="vendor/papaparse/papaparse.min.js"></script>
   <script src="vendor/chartjs/chart.umd.min.js"></script>
-  <script src="vendor/gsap/gsap.min.js"></script>
+  <script src="motion.js"></script>
   <script src="sample-sales.js"></script>
   <script src="app.js"></script>
 </body>

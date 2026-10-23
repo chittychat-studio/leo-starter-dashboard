@@ -11,7 +11,8 @@
 
   var Papa = window.Papa;
   var Chart = window.Chart;
-  var gsap = window.gsap || null;
+  // All DOM motion lives in motion.js (Web Animations API, no library).
+  var motion = window.LeoMotion || { on: function () { return false; }, count: function (a, b, u, done) { done(); return { stop: function () {} }; }, fadeIn: function () {}, rise: function () {}, entrance: function () {} };
 
   var $ = function (id) { return document.getElementById(id); };
   var root = document.documentElement;
@@ -301,21 +302,31 @@
     return { labels: items.map(function (r) { return r.label; }), values: items.map(function (r) { return r.value; }) };
   }
 
-  /* ================= motion helpers (GSAP) ================= */
+  /* ================= motion helpers (motion.js) ================= */
 
-  function animate() { return gsap && !reduceMotion.matches; }
+  // Changes made from the keyboard apply instantly: no count-ups, no chart motion, no
+  // cross-fade. Shortcuts are repeated many times a day and motion would make them feel slow.
+  var quiet = false;
+  function animate() { return motion.on() && !quiet; }
+  function instantly(fn) { quiet = true; try { fn(); } finally { quiet = false; } }
 
   function countTo(node, key, to) {
     var from = lastKpis[key];
     lastKpis[key] = to;
-    if (!animate() || !isFinite(to)) { node.textContent = fmt(to); return; }
-    var obj = { v: from == null ? 0 : from };
-    if (kpiTweens[key]) kpiTweens[key].kill();
-    kpiTweens[key] = gsap.to(obj, {
-      v: to, duration: from == null ? 1.1 : 0.6, ease: "expo.out",
-      onUpdate: function () { node.textContent = fmt(obj.v); },
-      onComplete: function () { node.textContent = fmt(to); }
-    });
+    if (kpiTweens[key]) kpiTweens[key].stop();
+    if (!isFinite(to)) { node.textContent = fmt(to); return; }
+    if (quiet) { node.textContent = fmt(to); return; }
+    kpiTweens[key] = motion.count(from == null || !isFinite(from) ? 0 : from, to,
+      function (v) { node.textContent = fmt(v); },
+      function () { node.textContent = fmt(to); });
+  }
+
+  /* Smooth swaps between chart groupings. The View Transitions API cross-fades
+     the old chart into the new one where the browser supports it; elsewhere
+     Chart.js's own bar growth is the only motion. Reduced motion: instant. */
+  function withTransition(fn) {
+    if (!document.startViewTransition || reduceMotion.matches) { fn(); return; }
+    document.startViewTransition(fn);
   }
 
   /* ================= rendering ================= */
@@ -330,7 +341,7 @@
       var vals = idx.map(function (i) { return state.columns[j].values[i]; }).filter(isFinite);
       var sum = vals.reduce(function (a, b) { return a + b; }, 0);
       tiles.push({ key: "sum" + j, label: "Total " + state.columns[j].name, value: sum,
-        sub: "Average " + fmt(vals.length ? sum / vals.length : NaN) + " per row" });
+        sub: vals.length ? "Average " + fmt(sum / vals.length) + " per row" : "No rows to average" });
     });
 
     var fresh = list.children.length !== tiles.length;
@@ -363,7 +374,7 @@
     return {
       responsive: true,
       maintainAspectRatio: false,
-      animation: reduceMotion.matches ? false : { duration: 550, easing: "easeOutQuart" },
+      animation: reduceMotion.matches || quiet ? false : { duration: 400, easing: "easeOutQuart" },
       indexAxis: horizontal ? "y" : "x",
       plugins: {
         legend: { display: false },
@@ -387,9 +398,9 @@
     };
   }
 
-  function upsertChart(key, canvas, config) {
+  function upsertChart(key, canvas, config, fresh) {
     var existing = charts[key];
-    if (existing && existing.config.type === config.type) {
+    if (existing && !fresh && existing.config.type === config.type) {
       existing.data.labels = config.data.labels;
       existing.data.datasets[0].data = config.data.datasets[0].data;
       Object.assign(existing.data.datasets[0], config.data.datasets[0], { data: existing.data.datasets[0].data });
@@ -402,8 +413,12 @@
     return charts[key];
   }
 
+  var lastGrouping = "";
   function renderCharts(idx, c) {
     var p = palette();
+    var grouping = c.x + "|" + c.y + "|" + c.agg;
+    var regroup = grouping !== lastGrouping;
+    lastGrouping = grouping;
     var measure = c.y >= 0 ? state.columns[c.y].name : "rows";
     var aggText = c.agg === "count" ? "Count of rows" : AGG_LABEL[c.agg] + " of " + measure;
 
@@ -440,11 +455,13 @@
         borderRadius: 4, maxBarThickness: 44
       }] },
       options: chartOptions(p, horizontal)
-    });
+    }, regroup);
     describeChart(bar.canvas, "Bar chart of " + aggText.toLowerCase() + " by " + xCol.name, grouped.labels, grouped.values);
   }
 
   function describeChart(canvas, title, labels, values) {
+    var empty = canvas.parentElement.querySelector(".chart-empty");
+    if (empty) empty.hidden = values.length > 0;
     if (!values.length) { canvas.setAttribute("aria-label", title + ". No data."); return; }
     var max = 0;
     values.forEach(function (v, k) { if (v > values[max]) max = k; });
@@ -516,7 +533,16 @@
       var tr0 = document.createElement("tr");
       var td0 = document.createElement("td");
       td0.colSpan = state.columns.length; td0.className = "empty";
-      td0.textContent = view.search ? "No rows match “" + view.search + "”." : "No rows match the current filters.";
+      var msg = document.createElement("p");
+      msg.textContent = view.search ? "No rows match “" + view.search + "”." : "No rows match the current filters.";
+      var clear = document.createElement("button");
+      clear.type = "button"; clear.className = "btn btn-secondary btn-small";
+      clear.textContent = view.search ? "Clear search" : "Clear filters";
+      clear.addEventListener("click", function () {
+        if (view.search) { $("search").value = ""; view.search = ""; renderTable(true); }
+        else clearFilters();
+      });
+      td0.append(msg, clear);
       tr0.appendChild(td0); frag.appendChild(tr0);
     }
     slice.forEach(function (i) {
@@ -536,7 +562,7 @@
     });
     tbody.textContent = "";
     tbody.appendChild(frag);
-    if (soft && animate()) gsap.fromTo(tbody, { autoAlpha: 0.35 }, { autoAlpha: 1, duration: 0.25, ease: "power1.out" });
+    if (soft && !quiet) motion.fadeIn(tbody);
 
     $("page-info").textContent = idx.length
       ? "Showing " + fmt(start + 1) + " to " + fmt(start + slice.length) + " of " + fmt(idx.length) + " rows"
@@ -571,6 +597,8 @@
       state.columns[best].type = state.columns[best].type === "number" ? "number" : "category";
       x.appendChild(option(best, state.columns[best].name));
     }
+
+    renderGroupChips();
 
     var y = $("y-col"); y.textContent = "";
     nums.forEach(function (j) { y.appendChild(option(j, state.columns[j].name)); });
@@ -613,6 +641,48 @@
       line.append(b, document.createTextNode(groupsByType[pair[0]].join(", ")), document.createElement("br"));
       summary.appendChild(line);
     });
+  }
+
+  // Quick grouping chips above the bar chart (the same choice as "Group by").
+  function renderGroupChips() {
+    var box = $("group-switch");
+    box.textContent = "";
+    var x = $("x-col");
+    var opts = Array.prototype.slice.call(x.options, 0, 6);
+    if (opts.length < 2) { box.hidden = true; return; }
+    box.hidden = false;
+    opts.forEach(function (o) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.setAttribute("role", "radio");
+      b.textContent = state.columns[+o.value].name;
+      b.title = state.columns[+o.value].name;
+      b.dataset.value = o.value;
+      b.addEventListener("click", function () { setGrouping(o.value); });
+      box.appendChild(b);
+    });
+    syncGroupChips();
+  }
+  function syncGroupChips() {
+    var current = $("x-col").value;
+    $("group-switch").querySelectorAll(".chip").forEach(function (b) {
+      var on = b.dataset.value === current;
+      b.setAttribute("aria-checked", String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+  }
+  function setGrouping(value) {
+    if ($("x-col").value === String(value)) return;
+    $("x-col").value = value;
+    syncGroupChips();
+    withTransition(function () { update(true); });
+  }
+  function cycleSelect(id, dir) {
+    var sel = $(id);
+    var opts = Array.prototype.filter.call(sel.options, function (o) { return !o.disabled; });
+    if (sel.disabled || opts.length < 2) return false;
+    var i = opts.findIndex(function (o) { return o.value === sel.value; });
+    sel.value = opts[(i + dir + opts.length) % opts.length].value;
+    return true;
   }
 
   function fillFilterValues() {
@@ -678,22 +748,14 @@
     var delim = { ",": "comma", ";": "semicolon", "\t": "tab", "|": "pipe" }[ds.delimiter] || "custom";
     lbl.append(name, " · " + fmt(ds.rows.length) + " rows, " + ds.columns.length + " columns, " + delim + " separated" +
       (ds.ragged ? ", " + fmt(ds.ragged) + " rows had missing or extra cells" : ""));
+    lbl.title = lbl.textContent; // the full name stays readable when the bar truncates it
     lbl.hidden = false;
 
     setupControls();
     showDashboard(true);
     renderTableHead();
     update(false);
-    entrance();
-  }
-
-  function entrance() {
-    if (!animate()) return;
-    var tl = gsap.timeline({ defaults: { ease: "expo.out" } });
-    tl.from(".controls fieldset, .controls .types", { x: -12, autoAlpha: 0, duration: 0.5, stagger: 0.05 })
-      .from(".kpi", { y: 14, autoAlpha: 0, duration: 0.6, stagger: 0.06 }, 0.05)
-      .from(".charts .panel", { y: 18, autoAlpha: 0, duration: 0.7, stagger: 0.08 }, 0.15)
-      .from(".table-panel", { y: 18, autoAlpha: 0, duration: 0.7 }, 0.3);
+    motion.entrance();
   }
 
   function showDashboard(on) {
@@ -703,12 +765,23 @@
     if (!on) $("dataset-label").hidden = true;
   }
 
+  function setReading(name) {
+    var dz = $("dropzone");
+    dz.classList.toggle("is-reading", !!name);
+    $("reading-name").textContent = name ? "Reading " + name : "";
+    $("drop-overlay").classList.remove("is-active");
+  }
+
   function readFile(file) {
     if (!file) return;
     if (file.size > MAX_BYTES) { showDashboard(false); showError("That file is larger than 100 MB. Try a smaller export."); return; }
+    setReading(file.name);
     var reader = new FileReader();
-    reader.onload = function () { load(String(reader.result), file.name); };
-    reader.onerror = function () { showDashboard(false); showError("Could not read that file. Try saving it again as CSV."); };
+    reader.onload = function () {
+      // Let the "Reading" state paint before parsing a large file.
+      setTimeout(function () { load(String(reader.result), file.name); setReading(""); }, 30);
+    };
+    reader.onerror = function () { setReading(""); showDashboard(false); showError("Could not read that file. Try saving it again as CSV."); };
     reader.readAsText(file);
   }
 
@@ -788,21 +861,25 @@
   });
   $("new-data").addEventListener("click", function () {
     showDashboard(false);
-    if (animate()) gsap.from("#start", { autoAlpha: 0, y: 10, duration: 0.4, ease: "expo.out" });
+    motion.rise($("start"));
     $("dropzone").focus();
   });
 
   var form = $("controls-form");
   form.addEventListener("submit", function (e) { e.preventDefault(); });
   $("filter-col").addEventListener("change", function () { fillFilterValues(); update(true); });
-  ["x-col", "y-col", "agg", "filter-val", "date-from", "date-to"].forEach(function (id) {
+  ["x-col", "y-col", "agg"].forEach(function (id) {
+    $(id).addEventListener("change", function () { syncGroupChips(); withTransition(function () { update(true); }); });
+  });
+  ["filter-val", "date-from", "date-to"].forEach(function (id) {
     $(id).addEventListener("change", function () { update(true); });
   });
-  $("reset-filters").addEventListener("click", function () {
+  function clearFilters() {
     $("filter-col").value = ""; fillFilterValues();
     $("date-from").value = ""; $("date-to").value = "";
     update(true);
-  });
+  }
+  $("reset-filters").addEventListener("click", clearFilters);
 
   var searchTimer;
   $("search").addEventListener("input", function (e) {
@@ -819,7 +896,10 @@
   window.addEventListener("dragenter", function (e) {
     if (!hasFiles(e)) return;
     e.preventDefault(); dragDepth++;
-    if ($("start").hidden) overlay.classList.add("is-active"); else dropzone.classList.add("is-over");
+    if ($("start").hidden) {
+      $("drop-current").textContent = state ? "This replaces " + state.label + "." : "";
+      overlay.classList.add("is-active");
+    } else dropzone.classList.add("is-over");
   });
   window.addEventListener("dragover", function (e) { if (hasFiles(e)) e.preventDefault(); });
   window.addEventListener("dragleave", function () {
@@ -864,6 +944,71 @@
   });
 
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+
+  /* ================= keyboard shortcuts ================= */
+
+  var help = $("shortcuts");
+  function openHelp(e) {
+    if (help.open) return;
+    help.classList.toggle("is-instant", !!(e && e.type === "keydown"));
+    if (help.showModal) help.showModal(); else help.setAttribute("open", "");
+  }
+  function closeHelp() { if (help.close) help.close(); else help.removeAttribute("open"); }
+  $("help-btn").addEventListener("click", openHelp);
+  $("help-close").addEventListener("click", closeHelp);
+  help.addEventListener("click", function (e) { if (e.target === help) closeHelp(); });
+
+  function typing(t) {
+    return t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
+  }
+  var shortcuts = {
+    "?": openHelp,
+    "/": function () { if (state) { $("search").focus(); $("search").select(); } },
+    "g": function (e) { if (state && cycleSelect("x-col", e.shiftKey ? -1 : 1)) { syncGroupChips(); instantly(function () { update(true); }); } },
+    "m": function (e) { if (state && cycleSelect("y-col", e.shiftKey ? -1 : 1)) instantly(function () { update(true); }); },
+    "c": function (e) { if (state && cycleSelect("agg", e.shiftKey ? -1 : 1)) instantly(function () { update(true); }); },
+    "f": function () { if (state) { $("controls-details").open = true; $("filter-col").focus(); } },
+    "x": function () { if (state) instantly(clearFilters); },
+    "[": function () { if (state && !$("prev-page").disabled) instantly(function () { $("prev-page").click(); }); },
+    "]": function () { if (state && !$("next-page").disabled) instantly(function () { $("next-page").click(); }); },
+    "e": function () { if (state) $("export-csv").click(); },
+    "t": function () { themeBtn.click(); },
+    "o": function () { $("file-input").click(); },
+    "s": function () { if (!$("start").hidden) loadSample(); }
+  };
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    if (e.key === "Escape") {
+      if (help.open) return; // the dialog closes itself
+      if (document.activeElement === $("search")) $("search").blur();
+      return;
+    }
+    if (typing(e.target) || help.open) return;
+    var fn = shortcuts[e.key.length === 1 ? e.key.toLowerCase() : ""] || shortcuts[e.key];
+    if (!fn) return;
+    e.preventDefault();
+    fn(e);
+  });
+
+  /* ================= 3D start field (three.js, lazy loaded) =================
+     Only when WebGL works, reduced motion is off and the page is served over http(s):
+     browsers load ES modules (three.js) only over http. The CSS drawing stays otherwise. */
+  function webglAvailable() {
+    try {
+      var c = document.createElement("canvas");
+      return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl")));
+    } catch (e) { return false; }
+  }
+  function loadStartField() {
+    if (reduceMotion.matches || location.protocol === "file:" || !webglAvailable()) return;
+    var stage = document.querySelector(".dropzone-preview");
+    if (!stage) return;
+    import("./start3d.js")
+      .then(function (mod) { mod.startField(stage, $("dropzone")); })
+      .catch(function (err) { if (window.console) console.info("3D start field not started:", err && err.message); });
+  }
+  if ("requestIdleCallback" in window) requestIdleCallback(loadStartField, { timeout: 1500 });
+  else setTimeout(loadStartField, 400);
 
   // Handy for testing and for adding your own data source: window.leoDashboard.load(csvText, "Name")
   window.leoDashboard = { load: load, loadSample: loadSample, parseNumber: parseNumber, parseDate: parseDate };
