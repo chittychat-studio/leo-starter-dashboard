@@ -90,3 +90,5 @@ listed above.
   (https://github.com/pbakaus/impeccable, Apache-2.0) for typography, colour, spacing and polish;
   and taste-skill (https://github.com/Leonxlnx/taste-skill, MIT) for removing generic
   "generated look" tells. None of their files are included here.
+
+Third-party files in vendor/ and fonts/ keep their own licences, listed above.
