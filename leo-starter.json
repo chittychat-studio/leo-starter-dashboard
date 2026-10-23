@@ -1,0 +1,46 @@
+{
+  "name": "leo-starter-dashboard",
+  "title": "Leo's starter: Dashboard from a spreadsheet",
+  "description": "Drop, paste or load a CSV and get key numbers, charts and a searchable table. Runs entirely in the browser; data never leaves the device.",
+  "version": "1.0.0",
+  "license": "MIT (template code). Vendored GSAP uses the Standard No Charge GSAP License, see NOTICE.md.",
+  "author": "Cardzo",
+  "stack": [
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "Chart.js 4.5.1",
+    "Papa Parse 5.4.1",
+    "GSAP 3.15.0"
+  ],
+  "buildStep": false,
+  "entry": "index.html",
+  "sampleData": "sample-sales.csv (fictional, 200 rows: date, region, product, units, revenue)",
+  "features": [
+    "Drag and drop, file picker, or paste CSV",
+    "Comma, semicolon, tab and pipe separators, quoted fields",
+    "Detects number, date and category columns",
+    "KPI tiles with count-up motion",
+    "Line chart over a date column with automatic day, week or month buckets",
+    "Bar chart with choice of group, measure and sum, average or count",
+    "Category filter and date range",
+    "Sortable, searchable, paginated table",
+    "Export chart as PNG and filtered rows as CSV (formula-safe)",
+    "Light and dark themes, keyboard friendly, mobile layout",
+    "No network calls with your data"
+  ],
+  "demo": {
+    "quick": "Double-click index.html, then click 'Try the sample sales data'",
+    "local": "python -m http.server 8000, then open http://localhost:8000",
+    "screenshots": [
+      "docs/desktop-light.png",
+      "docs/desktop-dark.png",
+      "docs/phone-light.png"
+    ]
+  },
+  "deploy": [
+    "GitHub Pages",
+    "Cloudflare Pages",
+    "Netlify"
+  ]
+}

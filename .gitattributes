@@ -1,0 +1,4 @@
+# Keep vendored libraries byte-for-byte identical to their published releases (see NOTICE.md hashes).
+vendor/** -text
+fonts/fonts.css -text
+*.png binary

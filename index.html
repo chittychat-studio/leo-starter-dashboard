@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spreadsheet dashboard</title>
+  <meta name="description" content="Drop a CSV and get an instant dashboard. Everything runs in your browser.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem("leo-dash-theme"); } catch (e) {}
+      var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.setAttribute("data-theme", saved || (dark ? "dark" : "light"));
+    })();
+  </script>
+  <link rel="stylesheet" href="fonts/fonts.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>
+        <span>Spreadsheet dashboard</span>
+      </a>
+      <p class="dataset" id="dataset-label" hidden></p>
+      <div class="topbar-actions">
+        <button class="btn btn-quiet" type="button" id="new-data" aria-label="Load other data" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+          <span>Load other data</span>
+        </button>
+        <button class="icon-btn" type="button" id="theme-toggle" aria-label="Switch to dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1.5 12h3M19.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- First run: choose data -->
+    <section class="start" id="start" aria-labelledby="start-title">
+      <div class="start-copy">
+        <h1 id="start-title">Turn a spreadsheet into a dashboard</h1>
+        <p>Drop a CSV file, paste one, or try the sample. You get totals, charts and a searchable table in a second.</p>
+        <p class="privacy">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          Your data stays on this device. Nothing is uploaded.
+        </p>
+      </div>
+
+      <div class="start-options">
+        <label class="dropzone" id="dropzone" for="file-input">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14h6M9 17h4"/></svg>
+          <span class="dropzone-title">Drop a CSV file here</span>
+          <span class="dropzone-hint">or click to choose one. Commas, semicolons, tabs and pipes all work.</span>
+          <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" class="sr-only">
+        </label>
+
+        <div class="start-side">
+          <button class="btn btn-primary" type="button" id="load-sample">Try the sample sales data</button>
+          <details class="paste">
+            <summary>Paste CSV text instead</summary>
+            <label for="paste-input" class="field-label">CSV text, first row is the header</label>
+            <textarea id="paste-input" rows="7" spellcheck="false" placeholder="date,region,units&#10;2025-01-02,North,12&#10;2025-01-03,South,7"></textarea>
+            <button class="btn btn-secondary" type="button" id="paste-go">Build dashboard</button>
+          </details>
+        </div>
+      </div>
+      <p class="error" id="load-error" role="alert" hidden></p>
+    </section>
+
+    <!-- Dashboard -->
+    <div class="dash" id="dash" hidden>
+      <aside class="controls" aria-label="Chart and filter settings">
+        <details class="controls-details" id="controls-details" open>
+        <summary>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+          <span>Chart and filter settings</span>
+        </summary>
+        <form id="controls-form" novalidate>
+          <fieldset>
+            <legend>Chart</legend>
+            <label class="field-label" for="x-col">Group by</label>
+            <select id="x-col"></select>
+            <label class="field-label" for="y-col">Measure</label>
+            <select id="y-col"></select>
+            <label class="field-label" for="agg">Calculation</label>
+            <select id="agg">
+              <option value="sum">Sum</option>
+              <option value="avg">Average</option>
+              <option value="count">Count of rows</option>
+            </select>
+          </fieldset>
+
+          <fieldset>
+            <legend>Filter</legend>
+            <label class="field-label" for="filter-col">Column</label>
+            <select id="filter-col"></select>
+            <label class="field-label" for="filter-val">Value</label>
+            <select id="filter-val"></select>
+            <div class="date-range" id="date-range" hidden>
+              <label class="field-label" for="date-from">From</label>
+              <input type="date" id="date-from">
+              <label class="field-label" for="date-to">To</label>
+              <input type="date" id="date-to">
+            </div>
+            <button class="btn btn-quiet btn-block" type="button" id="reset-filters">Clear filters</button>
+          </fieldset>
+
+          <p class="types" id="type-summary"></p>
+        </form>
+        </details>
+      </aside>
+
+      <div class="board">
+        <p class="filter-note" id="filter-note" aria-live="polite"></p>
+        <ul class="kpis" id="kpis" aria-label="Key numbers"></ul>
+
+        <div class="charts">
+          <section class="panel" id="line-panel" aria-labelledby="line-title">
+            <header class="panel-head">
+              <h2 id="line-title">Over time</h2>
+              <button class="btn btn-quiet btn-small" type="button" data-export="line">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>
+                <span>PNG</span>
+              </button>
+            </header>
+            <div class="chart-box"><canvas id="line-chart" role="img" aria-label="Line chart"></canvas></div>
+          </section>
+
+          <section class="panel" id="bar-panel" aria-labelledby="bar-title">
+            <header class="panel-head">
+              <h2 id="bar-title">By group</h2>
+              <button class="btn btn-quiet btn-small" type="button" data-export="bar">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>
+                <span>PNG</span>
+              </button>
+            </header>
+            <div class="chart-box"><canvas id="bar-chart" role="img" aria-label="Bar chart"></canvas></div>
+          </section>
+        </div>
+
+        <section class="panel table-panel" aria-labelledby="table-title">
+          <header class="panel-head table-head">
+            <h2 id="table-title">Rows</h2>
+            <div class="table-tools">
+              <label class="sr-only" for="search">Search rows</label>
+              <div class="search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+                <input type="search" id="search" placeholder="Search rows" autocomplete="off">
+              </div>
+              <button class="btn btn-secondary btn-small" type="button" id="export-csv">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>
+                <span>Download CSV</span>
+              </button>
+            </div>
+          </header>
+          <div class="table-wrap" tabindex="0" role="region" aria-labelledby="table-title">
+            <table id="table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <nav class="pager" aria-label="Table pages">
+            <p id="page-info" aria-live="polite"></p>
+            <div class="pager-buttons">
+              <label class="field-label inline" for="page-size">Rows per page</label>
+              <select id="page-size">
+                <option>10</option><option selected>25</option><option>50</option><option>100</option>
+              </select>
+              <button class="btn btn-quiet btn-small" type="button" id="prev-page">Previous</button>
+              <button class="btn btn-quiet btn-small" type="button" id="next-page">Next</button>
+            </div>
+          </nav>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <p>Built with Leo's starter from Replore. Charts by Chart.js, parsing by Papa Parse, motion by GSAP.</p>
+  </footer>
+
+  <div class="drop-overlay" id="drop-overlay" aria-hidden="true"><p>Drop your CSV to build a new dashboard</p></div>
+
+  <script src="vendor/papaparse/papaparse.min.js"></script>
+  <script src="vendor/chartjs/chart.umd.min.js"></script>
+  <script src="vendor/gsap/gsap.min.js"></script>
+  <script src="sample-sales.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
